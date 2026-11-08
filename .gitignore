@@ -1,0 +1,108 @@
+
+
+# 1. Environment Variables & Secrets (CRITICAL)
+.env
+.env.*
+*.env
+*.pem
+*.key
+*.cert
+*.crt
+credentials.json
+client_secret*.json
+
+# Retain example env file for repository users
+!.env.example
+
+# 2. Raw Data, Caches, & Generated Artifacts
+data/raw/*
+!data/raw/.gitkeep
+
+data/cache/*
+!data/cache/.gitkeep
+
+data/reports/*
+!data/reports/.gitkeep
+
+# Parquet, datasets, and cache files
+*.parquet
+*.feather
+*.h5
+*.hdf5
+*.pkl
+*.pickle
+*.sqlite
+*.sqlite3
+*.db
+llm_sentiment_cache.json
+
+# 3. Python Runtime & Bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# 4. Packaging, Builds, & Distribution
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# 5. Virtual Environments
+.venv/
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# 6. Testing, Linting & Type Checking
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.tox/
+.nox/
+.coverage
+.coverage.*
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+htmlcov/
+.hypothesis/
+
+# 7. IDE, Editor & OS Files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+[Dd]esktop.ini
+
+# 8. Logs & Diagnostic Dumps
+*.log
+logs/
+*.pid
+*.seed
+*.crashdump
