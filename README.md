@@ -6,6 +6,7 @@
 [![Architecture](https://img.shields.io/badge/Architecture-Clean%20Architecture-brightgreen.svg)]()
 [![Orchestration](https://img.shields.io/badge/Pipeline-LangGraph-purple.svg)]()
 [![Tests](https://img.shields.io/badge/Tests-20%20Passed-success.svg)]()
+[![Code Style](https://img.shields.io/badge/Code%20Style-Ruff-000000.svg)](https://github.com/astral-sh/ruff)
 
 ---
 
@@ -29,56 +30,68 @@
 
 ---
 
-## 2. Clean Architecture
+## 2. Technical Requirements & Provider Stack
+
+| Capability | Provider | Purpose |
+| :--- | :--- | :--- |
+| **Data Scraping (Alternative Data)** | [**Apify**](https://apify.com/) | Scrapes retail forum discussions (LIHKG, AAStocks for HKEX; Naver Finance, Daum Finance for KRX) to extract crowd conviction, likes, views, and retail long/short position claims. |
+| **Financial News & Sentiment** | [**EXA.com**](http://exa.com) | Semantic AI search engine for financial news retrieval. Pulls verified recent headlines, URLs, published timestamps, and full text snippets for each equity. |
+| **Multilingual Sentiment LLM** | **Groq / OpenAI API** | Scores raw text across Cantonese (`yue`), Mandarin (`zh`), Korean (`ko`), and English (`en`) into normalized sentiment $[-1.0, +1.0]$, direction, and position claims with SHA-256 caching and 429 rate-limit backoff. |
+| **Market Data** | **yfinance** | Ingests 1-hour OHLCV candles, strictly converted to UTC. |
+| **Pipeline Orchestrator** | **LangGraph** | Multi-node deterministic Directed Acyclic Graph (`StateGraph`). |
+
+---
+
+## 3. Strict Clean Architecture
 
 The system strictly follows **Clean Architecture** with inward-only dependency directions:
 
 ```
 hsi-sentiment-agent/
-├── domain/                    # Pure business entities & protocols (No I/O)
+├── domain/                    # Pure business entities & protocols (Zero external I/O)
 │   ├── models.py              # Post, NewsArticle, OHLCVBar, SentimentScore, etc.
 │   ├── enums.py               # Direction, PositionClaim, Exchange, LevelType
 │   ├── constants.py           # Ticker definitions, timezones (HKT, KST, UTC)
 │   └── interfaces.py          # SocialSource, NewsSource, MarketDataSource protocols
-├── application/               # Application use cases & business logic
-│   ├── ingestion.py           # Ingestion orchestrator
-│   ├── sentiment.py           # Sentiment analysis coordinator
+├── application/               # Application use cases & quantitative pipeline logic
+│   ├── ingestion.py           # Ingestion orchestrator (Apify, Exa, yfinance)
+│   ├── sentiment.py           # Sentiment analysis coordinator & weighting
 │   ├── features.py            # Leakage-free feature alignment & lagging
 │   ├── snapshot.py            # Ticker snapshot & crowd stance aggregation
-│   └── model_engine.py        # Pooled walk-forward validation & baselines
+│   └── model_engine.py        # Pooled walk-forward validation & honest baselines
 ├── infrastructure/            # Adapters, external APIs, and persistence
 │   ├── sources/
-│   │   ├── apify/             # LIHKG, AAStocks, Naver, Daum scrapers
-│   │   ├── exa_news_source.py # Exa.com financial news client
-│   │   └── yfinance_source.py # 1h OHLCV bar fetcher with UTC tz conversion
+│   │   ├── apify/             # Apify client & LIHKG, AAStocks, Naver, Daum scrapers
+│   │   ├── exa_news_source.py # EXA.com financial news search client
+│   │   └── yfinance_source.py # 1h OHLCV bar fetcher with UTC timezone conversion
 │   ├── llm/
-│   │   └── sentiment_scorer.py# Multilingual LLM scorer with hash caching
+│   │   └── sentiment_scorer.py# Dynamic LLM scorer (Groq/OpenAI) with disk caching
 │   ├── analysis/
-│   │   └── support_resistance.py # SciPy swing extrema & classical pivots
+│   │   └── support_resistance.py # SciPy swing extrema & classical daily floor pivots
 │   └── cache/
 │       └── parquet_repository.py # data/raw/*.parquet zero-cost cache
 ├── interfaces/                # User delivery & UI
-│   ├── cli.py                 # Click CLI interface
-│   └── reporting.py           # Plotly + Jinja2 self-contained HTML report
+│   ├── cli.py                 # Click CLI interface (UTF-8 safe)
+│   └── reporting.py           # Plotly + Jinja2 self-contained interactive HTML reports
 ├── agents/                    # LangGraph orchestration
 │   └── pipeline.py            # StateGraph: Ingest -> Sentiment -> Features -> Model -> Report
 ├── tests/                     # Comprehensive Pytest test suite (20 tests)
-├── data/                      # Parquet cache, logs, and generated HTML reports
-├── config.py                  # Pydantic-settings config (.env loader)
-├── Dockerfile                 # Containerized runtime
+├── data/                      # Raw parquet cache, LLM cache, and HTML reports
+├── config.py                  # Dynamic Pydantic-settings (.env loader)
+├── .gitignore                 # Strict rules protecting API keys and sensitive data
+├── Dockerfile                 # Containerized reproducible runtime
 ├── Makefile                   # Automation shortcuts
 └── pyproject.toml             # Packaging, Ruff & Mypy settings
 ```
 
 ---
 
-## 3. Key Methodologies & Honest Science
+## 4. Key Methodologies & Honest Science
 
 ### A. Ingestion & Resilient Zero-Cost Caching
-- **Social Sources**: Scrapes 2 distinct sources per exchange (LIHKG + AAStocks for HKEX; Naver Finance + Daum Finance for KRX).
-- **Apify Integration**: Supports Apify cloud actors or automatic fallback scrapers with rate-limit backoff.
-- **Exa News**: Multilingual entity search (`{English Name} {Local Name} {Code}`) over the lookback window.
-- **Parquet Raw Cache**: Automatically persists raw posts, news, and market bars in `data/raw/*.parquet`. Subsequent reruns never re-fetch existing data.
+- **https://apify.com/** — Used for data scraping of alternative data features across retail discussion boards (LIHKG + AAStocks for HKEX; Naver Finance + Daum Finance for KRX).
+- **[EXA.com](http://exa.com)** — Dedicated AI search engine for financial news retrieval and news sentiment. Performs semantic entity queries (`{English Name} {Local Name} {Code}`) over the lookback window.
+- **Parquet Raw Cache**: Automatically persists raw posts, news, and market bars in `data/raw/*.parquet`. Subsequent reruns never re-fetch existing data unless `--refresh` is supplied.
 
 ### B. Multilingual LLM Sentiment Scoring & Engagement Weighting
 - Accepts texts in **Cantonese, Mandarin Chinese, Korean, and English**.
@@ -101,8 +114,8 @@ hsi-sentiment-agent/
 - Verified via unit test: [`tests/test_features_and_leakage.py`](file:///tests/test_features_and_leakage.py) injects a sentiment shock at 14:30 and proves that bar 14:00 has zero knowledge of the shock.
 
 ### D. Support & Resistance (S/R) Detection
-- **Swing Highs & Lows**: Extracted using `scipy.signal.argrelextrema` on 1h bars with clustering for multiple touches.
-- **Classical Pivot Points**: Computes standard daily pivots ($PP, R1, S1, R2, S2$).
+- **Swing Highs & Lows**: Extracted using `scipy.signal.argrelextrema` on 1h bars with percentage clustering for multiple touches.
+- **Classical Pivot Points**: Computes standard daily floor pivots ($PP, R1, S1, R2, S2$).
 
 ### E. Honest Walk-Forward Validation vs Baselines
 - **No Random Splits**: Uses expanding window walk-forward validation with an **embargo gap** to eliminate temporal autocorrelation leakage.
@@ -116,97 +129,121 @@ hsi-sentiment-agent/
 
 ---
 
-## 4. Quickstart & How to Run
+## 5. Quickstart & Installation
 
-### Installation
+### 1. Clone & Set Up Environment
 ```bash
-# Clone and enter workspace
+# Clone the repository
 git clone <repo_url>
-cd hsi-sentiment-agent
+cd henseng-Senti
+
+# Create virtual environment (optional)
+python -m venv .venv
+.venv\Scripts\activate  # Windows
+# source .venv/bin/activate  # Linux/macOS
 
 # Install dependencies
 pip install -r requirements.txt
 pip install -e .
 ```
 
-### Environment Configuration (Optional)
-Copy `.env.example` to `.env` and fill in API credentials if available:
+### 2. Configure Credentials (`.env`)
+Create a `.env` file from `.env.example`:
 ```bash
 cp .env.example .env
 ```
+Fill in your API credentials:
 ```ini
+# https://apify.com/ - for data scraping (alternative data features)
 APIFY_TOKEN=your_apify_token_here
+
+# http://exa.com - for financial news search & news sentiment
 EXA_API_KEY=your_exa_api_key_here
-LLM_API_KEY=your_openai_or_compatible_key_here
-LLM_BASE_URL=https://api.openai.com/v1
-LLM_MODEL=gpt-4o-mini
+
+# Groq LLM (or OpenAI compatible)
+GROQ_API_KEY=gsk_...
+LLM_MODEL=qwen/qwen3.8-27b  # or llama-3.3-70b-versatile, openai/gpt-oss-120b
+
+# Pipeline Storage & Cache
+DATA_DIR=data
+RAW_CACHE_ENABLED=true
+LLM_CACHE_ENABLED=true
 ```
-*(Note: If API keys are omitted, the pipeline runs using rule-based multilingual parsing and cached parquet data without crashing).*
 
 ---
 
-### Running the CLI
+## 6. How to Run
 
-#### 1. Run Complete Pipeline (Ingest -> Sentiment -> Features -> Model -> Report)
-```bash
-# Run for HKEX (default 10 days lookback)
+### Run Full Pipeline & Generate Reports
+```powershell
+# Run both HKEX and KRX (10-day lookback):
+python -m interfaces.cli run --all --days 10
+
+# Run a single exchange:
 python -m interfaces.cli run --exchange HKEX --days 10
-
-# Run for KRX
 python -m interfaces.cli run --exchange KRX --days 10
 
-# Run for both exchanges
-python -m interfaces.cli run --all --days 10
+# Force-refresh cached bars, Apify scrapes, and EXA.com news:
+python -m interfaces.cli run --all --days 10 --refresh
 ```
 
-#### 2. Test Ingestion Only (Bars, Social, News)
-```bash
+### Test Ingestion Only (No Model Training)
+```powershell
 python -m interfaces.cli test-ingest --exchange HKEX --days 5
+python -m interfaces.cli test-ingest --exchange KRX --days 5
 ```
 
 ---
 
-## 5. Verification & Test Suite
+## 7. Interactive HTML Reports
 
-Run all 20 tests covering domain entities, UTC enforcement, leakage prevention, S/R logic, and walk-forward validation:
-
-```bash
-pytest tests/ -v
-```
-
-Check code style and types:
-```bash
-ruff check .
-mypy domain config.py
-```
-
----
-
-## 6. Docker & Makefile
-
-```bash
-# Using Makefile
-make test
-make run-hkex
-make run-krx
-make run-all
-
-# Using Docker
-make docker-build
-make docker-run
-```
-
----
-
-## 7. Sample Output
-
-Generated interactive reports are saved to:
+The generated self-contained HTML reports are saved in:
 - `data/reports/report_HKEX.html`
 - `data/reports/report_KRX.html`
 
-Each self-contained report includes:
-- **Ranked Table**: Mentions, weighted sentiment, crowd long/short claims, $n+1$ target return and price.
-- **Interactive Plotly Candlesticks**: 1h bars with green Support, red Resistance, and amber Pivot lines.
-- **Walk-Forward Validation Chart**: Out-of-sample predicted vs actual returns.
-- **Baselines Table**: Directional accuracy, binomial $p$-value, MAE lift vs price-only baseline.
-- **Limitations Box**: Retail sentiment noise, slippage, and sample constraints.
+Open them directly in any browser:
+```powershell
+# Windows
+start data\reports\report_HKEX.html
+start data\reports\report_KRX.html
+
+# macOS
+open data/reports/report_HKEX.html
+
+# Linux
+xdg-open data/reports/report_HKEX.html
+```
+
+### Each Report Includes:
+1. **Interactive Candlestick & Technical Level Charts:**
+   - 1-hour OHLCV candles via Plotly
+   - Clustered Support & Resistance levels
+   - Classical floor pivot points ($PP, R1, S1, R2, S2$)
+2. **Real-time Crowd & News Sentiment Breakdown:**
+   - Mentions, weighted score $\in [-1.0, +1.0]$, crowd stance (Bullish / Bearish / Neutral)
+   - Retail long vs short position claims
+   - Headlines pulled via EXA.com
+3. **Walk-Forward Validation & Honest Baseline Lift:**
+   - Next-bar return prediction ($n+1$)
+   - Benchmarked against No-change, Last-direction, and Price-only models
+   - Exact Binomial test $p$-value for directional accuracy
+4. **Transparent Limitations Box:**
+   - Explains lookback sample sizes, API rate limits, and market regime considerations.
+
+---
+
+## 8. Test Suite & Code Quality
+
+Run all 20 tests (100% pass):
+```powershell
+python -m pytest tests/ -v
+```
+
+Run code style & linter checks:
+```powershell
+python -m ruff check
+```
+
+---
+
+

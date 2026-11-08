@@ -120,7 +120,12 @@ class DataIngestionUseCase:
                 )
                 all_source_posts.extend(cached_posts)
             else:
-                logger.info("Scraping %s for %s tickers...", source_name, exchange.value)
+                logger.info(
+                    "Scraping alternative data via %s for %s tickers (Apify: %s)...",
+                    source_name,
+                    exchange.value,
+                    bool(getattr(src, "client", None)),
+                )
                 for ticker in tickers:
                     try:
                         ticker_posts = getattr(src, "fetch")(ticker, since, until)
@@ -133,14 +138,14 @@ class DataIngestionUseCase:
 
             posts_by_source[source_name] = all_source_posts
 
-        # 3. News Articles (Exa API)
+        # 3. News Articles (EXA.com for news sentiment)
         cached_news = [] if force_refresh else self.cache.load_news(exchange.value)
         news_articles: list[NewsArticle] = []
         if cached_news:
             logger.info("Loaded %d cached news articles for %s", len(cached_news), exchange.value)
             news_articles.extend(cached_news)
         else:
-            logger.info("Pulling Exa news for %s tickers...", exchange.value)
+            logger.info("Pulling EXA.com news sentiment for %s tickers...", exchange.value)
             for ticker in tickers:
                 try:
                     articles = self.news_source.fetch_news(ticker, since, until)

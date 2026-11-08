@@ -54,9 +54,13 @@ class ExaNewsSource:
         if since is None:
             since = until - timedelta(days=10)
 
-        # 1. If Exa key is present, try Exa
+        # 1. Primary: If Exa.com API is configured, use Exa for news sentiment
         if self._exa_client:
-            return self._fetch_via_exa(ticker, since, until, num_results)
+            logger.info("Fetching financial news for %s from EXA.com...", ticker.symbol)
+            articles = self._fetch_via_exa(ticker, since, until, num_results)
+            if articles:
+                return articles
+            logger.info("Exa.com returned 0 articles for %s; using backup news feed...", ticker.symbol)
 
         # 2. If Exa is not present, use news feed powered by Apify / Google News
         logger.info(
